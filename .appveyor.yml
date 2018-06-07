@@ -91,6 +91,8 @@ matrix:
   exclude:
     - configuration: Release
       platform: Win32
+    - configuration: Debug
+      platform: x64
 
 build:
   parallel: true                              # enable MSBuild parallel builds
