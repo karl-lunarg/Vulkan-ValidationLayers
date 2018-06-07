@@ -90,6 +90,7 @@ configuration:
 matrix:
   exclude:
     - configuration: Release
+      platform: Win32
 
 build:
   parallel: true                              # enable MSBuild parallel builds
