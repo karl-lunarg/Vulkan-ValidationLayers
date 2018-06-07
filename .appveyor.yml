@@ -87,7 +87,9 @@ configuration:
   - Release
   - Debug
 
-
+matrix:
+  exclude:
+    - configuration: Release
 
 build:
   parallel: true                              # enable MSBuild parallel builds
