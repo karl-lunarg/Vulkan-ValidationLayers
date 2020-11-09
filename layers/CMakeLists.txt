@@ -273,6 +273,10 @@ if(BUILD_LAYERS)
     if(result)
         message(FATAL_ERROR "Build step for abseil failed: ${result}")
     endif()
+    # TODO: Find a better way.  It is unfortunate that we have to add this.
+    if(MSVC)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244")
+    endif()
     add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/abseil-src ${CMAKE_CURRENT_BINARY_DIR}/abseil-build EXCLUDE_FROM_ALL)
     target_link_libraries(VkLayer_khronos_validation PRIVATE absl::base)
 

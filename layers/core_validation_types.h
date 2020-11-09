@@ -52,6 +52,8 @@
 #include <memory>
 #include <list>
 
+#include "absl/container/btree_map.h"
+
 #include "android_ndk_types.h"
 
 // Fwd declarations -- including descriptor_set.h creates an ugly include loop
@@ -190,7 +192,7 @@ inline bool operator==(const DescriptorReqirement &a, const DescriptorReqirement
 
 inline bool operator<(const DescriptorReqirement &a, const DescriptorReqirement &b) NOEXCEPT { return a.reqs < b.reqs; }
 
-typedef std::map<uint32_t, DescriptorReqirement> BindingReqMap;
+typedef absl::btree_map<uint32_t, DescriptorReqirement> BindingReqMap;
 
 struct DESCRIPTOR_POOL_STATE : BASE_NODE {
     VkDescriptorPool pool;
