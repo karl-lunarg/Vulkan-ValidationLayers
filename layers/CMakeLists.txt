@@ -255,6 +255,27 @@ if(BUILD_LAYERS)
     target_include_directories(VkLayer_khronos_validation PRIVATE ${SPIRV_HEADERS_INCLUDE_DIR})
     target_link_libraries(VkLayer_khronos_validation PRIVATE ${SPIRV_TOOLS_LIBRARIES})
 
+    # Abseil - C++ Standard Library replacement.  Download and unpack abseil at configure time.
+    configure_file(${PROJECT_SOURCE_DIR}/cmake/Abseil.CMakeLists.txt.in abseil-download/CMakeLists.txt)
+    # Configure the download task
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
+        RESULT_VARIABLE result
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/abseil-download)
+    if(result)
+        message(FATAL_ERROR "CMake step for abseil failed: ${result}")
+    endif()
+    # Execute the download task
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} --build .
+        RESULT_VARIABLE result
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/abseil-download)
+    if(result)
+        message(FATAL_ERROR "Build step for abseil failed: ${result}")
+    endif()
+    add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/abseil-src ${CMAKE_CURRENT_BINARY_DIR}/abseil-build EXCLUDE_FROM_ALL)
+    target_link_libraries(VkLayer_khronos_validation PRIVATE absl::base)
+
     # The output file needs Unix "/" separators or Windows "\" separators On top of that, Windows separators actually need to be doubled
     # because the json format uses backslash escapes
     file(TO_NATIVE_PATH "./" RELATIVE_PATH_PREFIX)
