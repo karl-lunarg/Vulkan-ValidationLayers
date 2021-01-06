@@ -197,6 +197,8 @@ set(CORE_VALIDATION_LIBRARY_FILES
     generated/spirv_validation_helper.cpp
     gpu_validation.cpp
     generated/corechecks_optick_instrumentation.cpp
+    memory_resource.cpp
+    memory_resource.h
     xxhash.c)
 
 set(OBJECT_LIFETIMES_LIBRARY_FILES
