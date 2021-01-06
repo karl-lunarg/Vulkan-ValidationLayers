@@ -39,6 +39,7 @@
 #include "convert_to_renderpass2.h"
 #include "layer_chassis_dispatch.h"
 #include "image_layout_map.h"
+#include "memory_resource.h"
 
 #include <array>
 #include <atomic>
@@ -53,6 +54,8 @@
 #include <vector>
 #include <memory>
 #include <list>
+#include <scoped_allocator>
+#include <type_traits>
 
 #include "android_ndk_types.h"
 
@@ -72,6 +75,72 @@ using ImageSubresourceLayoutMap = image_layout_map::ImageSubresourceLayoutMap;
 struct CMD_BUFFER_STATE;
 class CoreChecks;
 class ValidationStateTracker;
+
+// Custom Allocator
+constexpr static size_t kMonotonicBlockSize = 4096;
+
+template <class T>
+class CoreStdlibMonotonicAllocator {
+  public:
+    using value_type = T;
+    CoreStdlibMonotonicAllocator() noexcept {}
+    CoreStdlibMonotonicAllocator(std::shared_ptr<MonotonicMemoryResource> mr) noexcept : memory_resource(mr) {}
+    // Copy constructor
+    template <typename U>
+    friend class CoreStdlibMonotonicAllocator;  // TODO ???
+    template <class T>
+    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<T> const &other) noexcept : memory_resource(other.memory_resource) {}
+    ~CoreStdlibMonotonicAllocator() {}
+#ifdef _DEBUG
+    __declspec(noinline)  // TODO remove noinline
+#endif
+    value_type *allocate(std::size_t n) {
+#ifdef _DEBUG
+        std::cout << "allocate " << n * sizeof(value_type) << std::endl;
+#endif
+        value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
+        return tmp;
+    }
+#ifdef _DEBUG
+    __declspec(noinline)  // TODO remove noinline
+#endif
+void deallocate(value_type *, std::size_t n) noexcept  {
+#ifdef _DEBUG
+         std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
+#endif
+    }
+    template <class U>
+    bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+        return memory_resource == rhs.memory_resource;
+    }
+    template <class U>
+    bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+        return memory_resource != rhs.memory_resource;
+    }
+
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
+        // memory_resource = rhs.memory_resource;  TODO ?
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+    }
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
+        // memory_resource = std::move(rhs.memory_resource);  TODO ?
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+    }
+  private:
+    std::shared_ptr<MonotonicMemoryResource> memory_resource;
+};
+
+#ifdef _DEBUG
+__declspec(noinline)
+#endif
+static void map_destructor(ImageSubresourceLayoutMap *map) { map->ImageSubresourceLayoutMap::~ImageSubresourceLayoutMap(); }
+
+template <typename T>
+using Alloc = CoreStdlibMonotonicAllocator<T>;
+
+// END Custom Allocator
 
 class BASE_NODE {
   public:
@@ -1239,7 +1308,13 @@ typedef std::map<QueryObject, QueryState> QueryMap;
 typedef std::unordered_map<VkEvent, VkPipelineStageFlags> EventToStageMap;
 typedef ImageSubresourceLayoutMap::LayoutMap GlobalImageLayoutRangeMap;
 typedef std::unordered_map<VkImage, std::unique_ptr<GlobalImageLayoutRangeMap>> GlobalImageLayoutMap;
-typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap>> CommandBufferImageLayoutMap;
+// typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap>> CommandBufferImageLayoutMap;
+typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
+    Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>> CommandBufferImageLayoutMap;
+// This version uses the scoped_allocator_adaptor in case the container contains other containers.  This container does not.
+// typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
+//     std::scoped_allocator_adaptor<Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>> CommandBufferImageLayoutMap;
+
 
 enum LvlBindPoint {
     BindPoint_Graphics = VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1272,6 +1347,8 @@ struct SUBPASS_INFO;
 class FRAMEBUFFER_STATE;
 // Cmd Buffer Wrapper Struct - TODO : This desperately needs its own class
 struct CMD_BUFFER_STATE : public BASE_NODE {
+    CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : image_layout_map(mr), memory_resource(mr) {} 
+    // CMD_BUFFER_STATE() {} 
     VkCommandBuffer commandBuffer;
     VkCommandBufferAllocateInfo createInfo = {};
     VkCommandBufferBeginInfo beginInfo;
@@ -1342,6 +1419,8 @@ struct CMD_BUFFER_STATE : public BASE_NODE {
     std::unordered_set<QueryObject> startedQueries;
     std::unordered_set<QueryObject> resetQueries;
     CommandBufferImageLayoutMap image_layout_map;
+    // ScopedMap image_layout_map;
+    std::shared_ptr<MonotonicMemoryResource> memory_resource;
     CBVertexBufferBindingInfo current_vertex_buffer_binding_info;
     bool vertex_buffer_used;  // Track for perf warning to make sure any bound vtx buffer used
     VkCommandBuffer primaryCommandBuffer;

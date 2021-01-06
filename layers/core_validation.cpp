@@ -159,6 +159,16 @@ static std::unique_ptr<ImageSubresourceLayoutMap> LayoutMapFactory(const IMAGE_S
     return map;
 }
 
+#include "memory_resource.h"
+static std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)> LayoutMapFactory(
+    const IMAGE_STATE &image_state, std::shared_ptr<MonotonicMemoryResource> mr) {
+    ImageSubresourceLayoutMap *p = static_cast<ImageSubresourceLayoutMap *>(
+        mr->Allocate(sizeof(ImageSubresourceLayoutMap), alignof(ImageSubresourceLayoutMap)));
+    std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)> map(new (p) ImageSubresourceLayoutMap(image_state),
+                                                                              &map_destructor);
+    return map;
+}
+
 // The const variant only need the image as it is the key for the map
 const ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(const CMD_BUFFER_STATE *cb_state, VkImage image) {
     auto it = cb_state->image_layout_map.find(image);
@@ -173,7 +183,14 @@ ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(CMD_BUFFER_STATE *cb_sta
     auto it = cb_state->image_layout_map.find(image_state.image);
     if (it == cb_state->image_layout_map.end()) {
         // Empty slot... fill it in.
-        auto insert_pair = cb_state->image_layout_map.insert(std::make_pair(image_state.image, LayoutMapFactory(image_state)));
+#ifdef _DEBUG
+        std::cout << "Before " << cb_state->memory_resource.use_count() << std::endl;
+#endif
+        auto insert_pair = cb_state->image_layout_map.insert(
+            std::make_pair(image_state.image, LayoutMapFactory(image_state, cb_state->memory_resource)));
+#ifdef _DEBUG
+        std::cout << "After " << cb_state->memory_resource.use_count() << std::endl;
+#endif
         assert(insert_pair.second);
         ImageSubresourceLayoutMap *new_map = insert_pair.first->second.get();
         assert(new_map);
