@@ -39,7 +39,9 @@ void MonotonicMemoryResource::Clear(bool free_system_memory)
 
 void* MonotonicMemoryResource::Allocate(size_t object_bytes, size_t alignment_bytes)
 {
-    // std::cout << "Monotonic Allocator (memory resource) called for " << object_bytes << " bytes" << std::endl;
+#ifdef _DEBUG
+    std::cout << "Monotonic Allocator (memory resource) called for " << object_bytes << " bytes" << std::endl;
+#endif
     void* result = nullptr;
 
     // Don't allocate 0 bytes

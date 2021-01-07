@@ -1283,22 +1283,36 @@ class CoreStdlibMonotonicAllocator {
     CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<T> const &other) noexcept : memory_resource(other.memory_resource) {}
     ~CoreStdlibMonotonicAllocator() {}
     __declspec(noinline) value_type *allocate(std::size_t n) {
-        // std::cout << "allocate " << n * sizeof(value_type) << std::endl;
+#ifdef _DEBUG
+        std::cout << "allocate " << n * sizeof(value_type) << std::endl;
+#endif
         value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
         return tmp;
     }
     __declspec(noinline) void deallocate(value_type *, std::size_t n) noexcept  {
-        //  std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
+#ifdef _DEBUG
+         std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
+#endif
     }
     template <class U>
-    bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) noexcept {
+    bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
         return memory_resource == rhs.memory_resource;
     }
     template <class U>
-    bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) noexcept {
+    bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
         return memory_resource != rhs.memory_resource;
     }
 
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
+        // memory_resource = rhs.memory_resource;
+        memory_resource = std::make_shared<MonotonicMemoryResource>(4096);
+    }
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
+        // memory_resource = std::move(rhs.memory_resource);
+        memory_resource = std::make_shared<MonotonicMemoryResource>(4096);
+    }
   private:
     std::shared_ptr<MonotonicMemoryResource> memory_resource;
 };
@@ -1320,6 +1334,7 @@ class FRAMEBUFFER_STATE;
 // Cmd Buffer Wrapper Struct - TODO : This desperately needs its own class
 struct CMD_BUFFER_STATE : public BASE_NODE {
     CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : image_layout_map(mr), memory_resource(mr) {} 
+    // CMD_BUFFER_STATE() {} 
     VkCommandBuffer commandBuffer;
     VkCommandBufferAllocateInfo createInfo = {};
     VkCommandBufferBeginInfo beginInfo;

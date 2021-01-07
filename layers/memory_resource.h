@@ -43,11 +43,18 @@ public:
     MonotonicMemoryResource(size_t block_size) :
         block_size_(block_size), current_block_(0), current_block_free_bytes_(block_size)
     {
-        // std::cout << "Monotonic Allocator created!" << std::endl;
+#ifdef _DEBUG
+        std::cout << "Monotonic Allocator created!" << std::endl;
+#endif
     }
-
+#if 0
+    MonotonicMemoryResource(MonotonicMemoryResource const &other) :
+        block_size_(4096) {}
+#endif
     ~MonotonicMemoryResource() {
-        // std::cout << "Monotonic Allocator destroyed!" << std::endl;
+#ifdef _DEBUG
+        std::cout << "Monotonic Allocator destroyed!" << std::endl;
+#endif
         Clear(true);
     }
 
@@ -73,6 +80,12 @@ public:
     void Clear(bool free_system_memory);
 
     void* Allocate(size_t object_bytes, size_t alignment_bytes);
+
+    MonotonicMemoryResource& operator=(const MonotonicMemoryResource &rhs) noexcept {
+    }
+    MonotonicMemoryResource& operator=(MonotonicMemoryResource &&rhs) noexcept {
+    }
+
 private:
     void* AllocateToBlock(size_t object_bytes, size_t alignment_bytes);
 
