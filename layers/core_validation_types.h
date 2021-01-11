@@ -1270,6 +1270,8 @@ static LvlBindPoint inline ConvertToLvlBindPoint(VkPipelineBindPoint bind_point)
     return LvlBindPoint(~0U);
 }
 
+constexpr static size_t kMonotonicBlockSize = 4096;
+
 template <class T>
 class CoreStdlibMonotonicAllocator {
   public:
@@ -1306,12 +1308,12 @@ class CoreStdlibMonotonicAllocator {
     template <class U>
     CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
         // memory_resource = rhs.memory_resource;
-        memory_resource = std::make_shared<MonotonicMemoryResource>(4096);
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
     }
     template <class U>
     CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
         // memory_resource = std::move(rhs.memory_resource);
-        memory_resource = std::make_shared<MonotonicMemoryResource>(4096);
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
     }
   private:
     std::shared_ptr<MonotonicMemoryResource> memory_resource;

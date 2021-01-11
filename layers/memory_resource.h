@@ -49,7 +49,7 @@ public:
     }
 #if 0
     MonotonicMemoryResource(MonotonicMemoryResource const &other) :
-        block_size_(4096) {}
+        block_size_(kMonotonicBlockSize) {}
 #endif
     ~MonotonicMemoryResource() {
 #ifdef _DEBUG
@@ -80,6 +80,7 @@ public:
     void Clear(bool free_system_memory);
 
     void* Allocate(size_t object_bytes, size_t alignment_bytes);
+    size_t BlocksInUse() { return memory_blocks_.size(); }
 
     MonotonicMemoryResource& operator=(const MonotonicMemoryResource &rhs) noexcept {
     }

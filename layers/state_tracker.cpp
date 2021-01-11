@@ -1458,12 +1458,12 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
 #ifdef _DEBUG
         std::cout << "Reset command buffer After  clear:  " << cb_state->memory_resource.use_count() << std::endl;
 #endif
-        // cb_state->memory_resource->Clear(true);
-        // CommandBufferImageLayoutMap xx = CommandBufferImageLayoutMap(cb_state->memory_resource);
-        auto new_mr = std::make_shared<MonotonicMemoryResource>(4096);
-        // auto new_map = CommandBufferImageLayoutMap(new_mr);
-        cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
-        cb_state->memory_resource = new_mr;
+
+        if (cb_state->memory_resource->BlocksInUse() > 16) {
+            auto new_mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+            cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
+            cb_state->memory_resource = new_mr;
+        }
         cb_state->current_vertex_buffer_binding_info.vertex_buffer_bindings.clear();
         cb_state->vertex_buffer_used = false;
         cb_state->primaryCommandBuffer = VK_NULL_HANDLE;
@@ -3521,7 +3521,7 @@ void ValidationStateTracker::PostCallRecordAllocateCommandBuffers(VkDevice devic
         for (uint32_t i = 0; i < pCreateInfo->commandBufferCount; i++) {
             // Add command buffer to its commandPool map
             pool->commandBuffers.insert(pCommandBuffer[i]);
-            auto mr = std::make_shared<MonotonicMemoryResource>(4096);
+            auto mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
 #ifdef _DEBUG
             std::cout << "AllocateCommandBuffers handle  " << pCommandBuffer[i] << std::endl;
             std::cout << "AllocateCommandBuffers Before " << mr.use_count() << std::endl;
