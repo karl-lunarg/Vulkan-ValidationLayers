@@ -1452,18 +1452,20 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
 #endif
         }
 #ifdef _DEBUG
-        std::cout << "Reset command buffer Before clear: " << cb_state->memory_resource.use_count() << std::endl;
+        std::cout << "Reset command buffer Before clear: " << cb_state->command_pool->memory_resource.use_count() << std::endl;
 #endif
         cb_state->image_layout_map.clear();
 #ifdef _DEBUG
-        std::cout << "Reset command buffer After  clear:  " << cb_state->memory_resource.use_count() << std::endl;
+        std::cout << "Reset command buffer After  clear:  " << cb_state->command_pool->memory_resource.use_count() << std::endl;
 #endif
 
-        if (cb_state->memory_resource->BlocksInUse() > 16) {
+#if 0
+        if (cb_state->command_pool->memory_resource->BlocksInUse() > 16) {
             auto new_mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
             cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
-            cb_state->memory_resource = new_mr;
+            cb_state->command_pool->memory_resource = new_mr;
         }
+#endif
         cb_state->current_vertex_buffer_binding_info.vertex_buffer_bindings.clear();
         cb_state->vertex_buffer_used = false;
         cb_state->primaryCommandBuffer = VK_NULL_HANDLE;
@@ -3032,7 +3034,6 @@ void ValidationStateTracker::FreeCommandBufferStates(COMMAND_POOL_STATE *pool_st
             // reset prior to delete, removing various references to it.
             // TODO: fix this, it's insane.
             ResetCommandBufferState(cb_state->commandBuffer);
-            // cb_state->memory_resource->Clear(true);
             // Remove the cb_state's references from COMMAND_POOL_STATEs
             pool_state->commandBuffers.erase(command_buffers[i]);
             // Remove the cb debug labels
@@ -3060,6 +3061,7 @@ void ValidationStateTracker::PostCallRecordCreateCommandPool(VkDevice device, co
     cmd_pool_state->createFlags = pCreateInfo->flags;
     cmd_pool_state->queueFamilyIndex = pCreateInfo->queueFamilyIndex;
     cmd_pool_state->unprotected = ((pCreateInfo->flags & VK_COMMAND_POOL_CREATE_PROTECTED_BIT) == 0);
+    cmd_pool_state->memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
     commandPoolMap[command_pool] = std::move(cmd_pool_state);
 }
 
@@ -3521,15 +3523,7 @@ void ValidationStateTracker::PostCallRecordAllocateCommandBuffers(VkDevice devic
         for (uint32_t i = 0; i < pCreateInfo->commandBufferCount; i++) {
             // Add command buffer to its commandPool map
             pool->commandBuffers.insert(pCommandBuffer[i]);
-            auto mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
-#ifdef _DEBUG
-            std::cout << "AllocateCommandBuffers handle  " << pCommandBuffer[i] << std::endl;
-            std::cout << "AllocateCommandBuffers Before " << mr.use_count() << std::endl;
-#endif
-            auto cb_state = std::make_shared<CMD_BUFFER_STATE>(mr);
-#ifdef _DEBUG
-            std::cout << "AllocateCommandBuffers After  " << mr.use_count() << std::endl;
-#endif
+            auto cb_state = std::make_shared<CMD_BUFFER_STATE>(pool->memory_resource);
             cb_state->createInfo = *pCreateInfo;
             cb_state->command_pool = pool;
             cb_state->unprotected = pool->unprotected;

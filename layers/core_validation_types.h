@@ -76,6 +76,67 @@ struct CMD_BUFFER_STATE;
 class CoreChecks;
 class ValidationStateTracker;
 
+constexpr static size_t kMonotonicBlockSize = 4096;
+
+template <class T>
+class CoreStdlibMonotonicAllocator {
+  public:
+    using value_type = T;
+    CoreStdlibMonotonicAllocator() noexcept {}
+    CoreStdlibMonotonicAllocator(std::shared_ptr<MonotonicMemoryResource> mr) noexcept : memory_resource(mr) {}
+    // Copy constructor
+    template <typename U>
+    friend class CoreStdlibMonotonicAllocator;  // TODO ???
+    template <class T>
+    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<T> const &other) noexcept : memory_resource(other.memory_resource) {}
+    ~CoreStdlibMonotonicAllocator() {}
+    __declspec(noinline) value_type *allocate(std::size_t n) {
+#ifdef _DEBUG
+        std::cout << "allocate " << n * sizeof(value_type) << std::endl;
+#endif
+        value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
+        return tmp;
+    }
+    __declspec(noinline) void deallocate(value_type *, std::size_t n) noexcept  {
+#ifdef _DEBUG
+         std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
+#endif
+    }
+    template <class U>
+    bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+        return memory_resource == rhs.memory_resource;
+    }
+    template <class U>
+    bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+        return memory_resource != rhs.memory_resource;
+    }
+
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
+        // memory_resource = rhs.memory_resource;
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+    }
+    template <class U>
+    CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
+        // memory_resource = std::move(rhs.memory_resource);
+        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+    }
+  private:
+    std::shared_ptr<MonotonicMemoryResource> memory_resource;
+};
+
+__declspec(noinline) static void map_destructor(ImageSubresourceLayoutMap *map) { map->ImageSubresourceLayoutMap::~ImageSubresourceLayoutMap(); }
+
+template <typename T>
+using Alloc = CoreStdlibMonotonicAllocator<T>;
+
+// using ScopedMap = std::unordered_map<int, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<int>, std::equal_to<int>,
+//     std::scoped_allocator_adaptor<Alloc<std::pair<int, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>>;
+
+// typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap>> CommandBufferImageLayoutMap;
+typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
+    std::scoped_allocator_adaptor<Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>> CommandBufferImageLayoutMap;
+
 class BASE_NODE {
   public:
     // Track when object is being used by an in-flight command buffer
@@ -105,6 +166,7 @@ struct COMMAND_POOL_STATE : public BASE_NODE {
     bool unprotected;  // can't be used for protected memory
     // Cmd buffers allocated from this pool
     std::unordered_set<VkCommandBuffer> commandBuffers;
+    std::shared_ptr<MonotonicMemoryResource> memory_resource;
 };
 
 // Utilities for barriers and the commmand pool
@@ -1270,72 +1332,11 @@ static LvlBindPoint inline ConvertToLvlBindPoint(VkPipelineBindPoint bind_point)
     return LvlBindPoint(~0U);
 }
 
-constexpr static size_t kMonotonicBlockSize = 4096;
-
-template <class T>
-class CoreStdlibMonotonicAllocator {
-  public:
-    using value_type = T;
-    CoreStdlibMonotonicAllocator() noexcept {}
-    CoreStdlibMonotonicAllocator(std::shared_ptr<MonotonicMemoryResource> mr) noexcept : memory_resource(mr) {}
-    // Copy constructor
-    template <typename U>
-    friend class CoreStdlibMonotonicAllocator;  // TODO ???
-    template <class T>
-    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<T> const &other) noexcept : memory_resource(other.memory_resource) {}
-    ~CoreStdlibMonotonicAllocator() {}
-    __declspec(noinline) value_type *allocate(std::size_t n) {
-#ifdef _DEBUG
-        std::cout << "allocate " << n * sizeof(value_type) << std::endl;
-#endif
-        value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
-        return tmp;
-    }
-    __declspec(noinline) void deallocate(value_type *, std::size_t n) noexcept  {
-#ifdef _DEBUG
-         std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
-#endif
-    }
-    template <class U>
-    bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
-        return memory_resource == rhs.memory_resource;
-    }
-    template <class U>
-    bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
-        return memory_resource != rhs.memory_resource;
-    }
-
-    template <class U>
-    CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
-        // memory_resource = rhs.memory_resource;
-        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
-    }
-    template <class U>
-    CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
-        // memory_resource = std::move(rhs.memory_resource);
-        memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
-    }
-  private:
-    std::shared_ptr<MonotonicMemoryResource> memory_resource;
-};
-
-__declspec(noinline) static void map_destructor(ImageSubresourceLayoutMap *map) { map->ImageSubresourceLayoutMap::~ImageSubresourceLayoutMap(); }
-
-template <typename T>
-using Alloc = CoreStdlibMonotonicAllocator<T>;
-
-// using ScopedMap = std::unordered_map<int, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<int>, std::equal_to<int>,
-//     std::scoped_allocator_adaptor<Alloc<std::pair<int, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>>;
-
-// typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap>> CommandBufferImageLayoutMap;
-typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
-    std::scoped_allocator_adaptor<Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>> CommandBufferImageLayoutMap;
-
 struct SUBPASS_INFO;
 class FRAMEBUFFER_STATE;
 // Cmd Buffer Wrapper Struct - TODO : This desperately needs its own class
 struct CMD_BUFFER_STATE : public BASE_NODE {
-    CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : image_layout_map(mr), memory_resource(mr) {} 
+    CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : image_layout_map(mr) {} 
     // CMD_BUFFER_STATE() {} 
     VkCommandBuffer commandBuffer;
     VkCommandBufferAllocateInfo createInfo = {};
@@ -1407,8 +1408,6 @@ struct CMD_BUFFER_STATE : public BASE_NODE {
     std::unordered_set<QueryObject> startedQueries;
     std::unordered_set<QueryObject> resetQueries;
     CommandBufferImageLayoutMap image_layout_map;
-    // ScopedMap image_layout_map;
-    std::shared_ptr<MonotonicMemoryResource> memory_resource;
     CBVertexBufferBindingInfo current_vertex_buffer_binding_info;
     bool vertex_buffer_used;  // Track for perf warning to make sure any bound vtx buffer used
     VkCommandBuffer primaryCommandBuffer;
