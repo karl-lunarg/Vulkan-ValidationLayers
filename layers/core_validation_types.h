@@ -88,10 +88,10 @@ class CoreStdlibMonotonicAllocator {
     // Copy constructor
     template <typename U>
     friend class CoreStdlibMonotonicAllocator;  // TODO ???
-    template <class T>
-    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<T> const &other) noexcept : memory_resource(other.memory_resource) {}
+    template <class U>
+    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<U> const &other) noexcept : memory_resource(other.memory_resource) {}
     ~CoreStdlibMonotonicAllocator() {}
-#ifdef _DEBUG
+#if defined(_DEBUG) && !defined(__clang__)
     __declspec(noinline)  // TODO remove noinline
 #endif
     value_type *allocate(std::size_t n) {
@@ -101,7 +101,7 @@ class CoreStdlibMonotonicAllocator {
         value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
         return tmp;
     }
-#ifdef _DEBUG
+#if defined(_DEBUG) && !defined(__clang__)
     __declspec(noinline)  // TODO remove noinline
 #endif
 void deallocate(value_type *, std::size_t n) noexcept  {
@@ -132,7 +132,7 @@ void deallocate(value_type *, std::size_t n) noexcept  {
     std::shared_ptr<MonotonicMemoryResource> memory_resource;
 };
 
-#ifdef _DEBUG
+#if defined(_DEBUG) && !defined(__clang__)
 __declspec(noinline)
 #endif
 static void map_destructor(ImageSubresourceLayoutMap *map) { map->ImageSubresourceLayoutMap::~ImageSubresourceLayoutMap(); }
@@ -1310,7 +1310,7 @@ typedef ImageSubresourceLayoutMap::LayoutMap GlobalImageLayoutRangeMap;
 typedef std::unordered_map<VkImage, std::unique_ptr<GlobalImageLayoutRangeMap>> GlobalImageLayoutMap;
 // typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap>> CommandBufferImageLayoutMap;
 typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
-    Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>> CommandBufferImageLayoutMap;
+    Alloc<std::pair<VkImage const, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>> CommandBufferImageLayoutMap;
 // This version uses the scoped_allocator_adaptor in case the container contains other containers.  This container does not.
 // typedef std::unordered_map<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>, std::hash<VkImage>, std::equal_to<VkImage>,
 //     std::scoped_allocator_adaptor<Alloc<std::pair<VkImage, std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)>>>>> CommandBufferImageLayoutMap;

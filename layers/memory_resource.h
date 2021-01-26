@@ -40,7 +40,7 @@ public:
     // block_size is the size of the individual memory blocks allocated. The number of blocks increases as needed to
     // fit requested allocations, and blocks are freed using an appropriate call to Clear or upon destruction of this
     // MonotonicMemoryResource.
-    MonotonicMemoryResource(size_t block_size) :
+    MonotonicMemoryResource(std::size_t block_size) :
         block_size_(block_size), current_block_(0), current_block_free_bytes_(block_size)
     {
 #ifdef _DEBUG
@@ -79,23 +79,18 @@ public:
     // memory
     void Clear(bool free_system_memory);
 
-    void* Allocate(size_t object_bytes, size_t alignment_bytes);
+    void* Allocate(std::size_t object_bytes, std::size_t alignment_bytes);
     size_t BlocksInUse() { return memory_blocks_.size(); }
 
-    MonotonicMemoryResource& operator=(const MonotonicMemoryResource &rhs) noexcept {
-    }
-    MonotonicMemoryResource& operator=(MonotonicMemoryResource &&rhs) noexcept {
-    }
-
 private:
-    void* AllocateToBlock(size_t object_bytes, size_t alignment_bytes);
+    void* AllocateToBlock(std::size_t object_bytes, std::size_t alignment_bytes);
 
 private:
     std::vector<std::unique_ptr<unsigned char[]>> memory_blocks_;
     std::vector<std::unique_ptr<unsigned char[]>> oversized_allocations_;
-    const size_t                                  block_size_;
-    size_t                                        current_block_;
-    size_t                                        current_block_free_bytes_;
+    const std::size_t                             block_size_;
+    std::size_t                                   current_block_;
+    std::size_t                                   current_block_free_bytes_;
 };
 
 #endif // MEMORY_RESOURCE_H

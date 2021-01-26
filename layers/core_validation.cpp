@@ -159,7 +159,6 @@ static std::unique_ptr<ImageSubresourceLayoutMap> LayoutMapFactory(const IMAGE_S
     return map;
 }
 
-#include "memory_resource.h"
 static std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)> LayoutMapFactory(
     const IMAGE_STATE &image_state, std::shared_ptr<MonotonicMemoryResource> mr) {
     ImageSubresourceLayoutMap *p = static_cast<ImageSubresourceLayoutMap *>(
