@@ -83,20 +83,35 @@ template <class T>
 class CoreStdlibMonotonicAllocator {
   public:
     using value_type = T;
-    CoreStdlibMonotonicAllocator() noexcept {}
-    CoreStdlibMonotonicAllocator(std::shared_ptr<MonotonicMemoryResource> mr) noexcept : memory_resource(mr) {}
+    CoreStdlibMonotonicAllocator(std::shared_ptr<MonotonicMemoryResource> mr) noexcept : memory_resource(mr)
+    {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator ctor MR Use Count: " << mr.use_count() << std::endl;
+#endif
+    }
     // Copy constructor
     template <typename U>
     friend class CoreStdlibMonotonicAllocator;  // TODO ???
     template <class U>
-    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<U> const &other) noexcept : memory_resource(other.memory_resource) {}
-    ~CoreStdlibMonotonicAllocator() {}
+    CoreStdlibMonotonicAllocator(CoreStdlibMonotonicAllocator<U> const &other) noexcept : memory_resource(other.memory_resource)
+    {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator copy ctor MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
+#endif
+    }
+    ~CoreStdlibMonotonicAllocator()
+    {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator dtor MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
+#endif
+    }
 #if defined(_DEBUG) && !defined(__clang__)
     __declspec(noinline)  // TODO remove noinline
 #endif
     value_type *allocate(std::size_t n) {
 #ifdef _DEBUG
-        std::cout << "allocate " << n * sizeof(value_type) << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator allocate " << n * sizeof(value_type) << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator allocate MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
 #endif
         value_type *tmp = static_cast<value_type *>(memory_resource->Allocate(n * sizeof(value_type), alignof(value_type)));
         return tmp;
@@ -106,25 +121,40 @@ class CoreStdlibMonotonicAllocator {
 #endif
 void deallocate(value_type *, std::size_t n) noexcept  {
 #ifdef _DEBUG
-         std::cout << "deallocate " << n * sizeof(value_type) << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator deallocate (nop) " << n * sizeof(value_type) << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator deallocate MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
 #endif
     }
     template <class U>
     bool operator==(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator operator==" << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator operator== MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
+#endif
         return memory_resource == rhs.memory_resource;
     }
     template <class U>
     bool operator!=(CoreStdlibMonotonicAllocator<U> const &rhs) const noexcept {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator operator!=" << std::endl;
+        std::cout << "CoreStdlibMonotonicAllocator operator!= MR Use Count: " << memory_resource.use_count() << " CB " << memory_resource->GetCB() << std::endl;
+#endif
         return memory_resource != rhs.memory_resource;
     }
 
     template <class U>
     CoreStdlibMonotonicAllocator<T>& operator=(const CoreStdlibMonotonicAllocator<U> &rhs) noexcept {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator copy" << std::endl;
+#endif
         // memory_resource = rhs.memory_resource;  TODO ?
         memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
     }
     template <class U>
     CoreStdlibMonotonicAllocator<T>& operator=(CoreStdlibMonotonicAllocator<U> &&rhs) noexcept {
+#ifdef _DEBUG
+        std::cout << "CoreStdlibMonotonicAllocator move" << std::endl;
+#endif
         // memory_resource = std::move(rhs.memory_resource);  TODO ?
         memory_resource = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
     }

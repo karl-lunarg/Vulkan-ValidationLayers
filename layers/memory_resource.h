@@ -28,6 +28,9 @@
 #include <vector>
 
 #include <assert.h>
+#ifdef _DEBUG
+#include "vulkan/vulkan.h"
+#endif
 
 // Monotonic Memory Resource
 // This is a memory resource that is intended to be used with a std::allocator replacement
@@ -44,7 +47,7 @@ public:
         block_size_(block_size), current_block_(0), current_block_free_bytes_(block_size)
     {
 #ifdef _DEBUG
-        std::cout << "Monotonic Allocator created!" << std::endl;
+        std::cout << "MonotonicMemoryResource created!" << std::endl;
 #endif
     }
 #if 0
@@ -53,7 +56,7 @@ public:
 #endif
     ~MonotonicMemoryResource() {
 #ifdef _DEBUG
-        std::cout << "Monotonic Allocator destroyed!" << std::endl;
+        std::cout << "MonotonicMemoryResource destroyed!" << std::endl;
 #endif
         Clear(true);
     }
@@ -81,6 +84,10 @@ public:
 
     void* Allocate(std::size_t object_bytes, std::size_t alignment_bytes);
     size_t BlocksInUse() { return memory_blocks_.size(); }
+#ifdef _DEBUG
+    void SetCB(VkCommandBuffer cb) { cb_ = cb; std::cout << "MonotonicMemoryResource CB set " << cb_ << std::endl; }
+    VkCommandBuffer GetCB() { return cb_; }
+#endif
 
 private:
     void* AllocateToBlock(std::size_t object_bytes, std::size_t alignment_bytes);
@@ -91,6 +98,9 @@ private:
     const std::size_t                             block_size_;
     std::size_t                                   current_block_;
     std::size_t                                   current_block_free_bytes_;
+#ifdef _DEBUG
+    VkCommandBuffer                               cb_;
+#endif
 };
 
 #endif // MEMORY_RESOURCE_H

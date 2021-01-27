@@ -1408,7 +1408,9 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
     CMD_BUFFER_STATE *cb_state = GetCBState(cb);
     if (cb_state) {
 #ifdef _DEBUG
-        std::cout << "Reset command buffer - handle: " << cb_state->commandBuffer << std::endl;
+        std::cout << "Reset command buffer -  existing handle: " << cb_state->commandBuffer << std::endl;
+        std::cout << "Reset command buffer -  incoming handle: " << cb << std::endl;
+        std::cout << "Reset command buffer -  MR " << cb_state->memory_resource << std::endl;
 #endif
         cb_state->in_use.store(0);
         // Reset CB state (note that createInfo is not cleared)
@@ -1455,18 +1457,13 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
 #endif
         }
 #ifdef _DEBUG
-        std::cout << "Reset command buffer Before clear: " << cb_state->memory_resource.use_count() << std::endl;
+        std::cout << "Reset command buffer MR Use Count Before clear: " << cb_state->memory_resource.use_count() << std::endl;
 #endif
         cb_state->image_layout_map.clear();
 #ifdef _DEBUG
-        std::cout << "Reset command buffer After  clear:  " << cb_state->memory_resource.use_count() << std::endl;
+        std::cout << "Reset command buffer MR USe Count After  clear: " << cb_state->memory_resource.use_count() << std::endl;
 #endif
 
-        if (cb_state->memory_resource->BlocksInUse() > 16) {
-            auto new_mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
-            cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
-            cb_state->memory_resource = new_mr;
-        }
         cb_state->current_vertex_buffer_binding_info.vertex_buffer_bindings.clear();
         cb_state->vertex_buffer_used = false;
         cb_state->primaryCommandBuffer = VK_NULL_HANDLE;
@@ -1510,6 +1507,20 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
         cb_state->small_indexed_draw_call_count = 0;
 
         cb_state->transform_feedback_active = false;
+
+        // If we get a lot of resets before the CB is destroyed, then the memory resource keeps growing because the CB state
+        // isn't getting destroyed (until the CB itself is actually destroyed).  The image_layout_map is still using the memory resource
+        // so we must do:
+        // - Create a new memory resource
+        // - Create a new image_layout_map with the new memory resource
+        // - Destroy the old image_layout_map by writing over it with the new one
+        // - Destroy the old memory resource by writing over it with the new one
+        // Note that the image layout map should be empty before doing this.
+        if (cb_state->memory_resource->BlocksInUse() > 16) {
+            auto new_mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+            cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
+            cb_state->memory_resource = new_mr;
+        }
     }
     if (command_buffer_reset_callback) {
         (*command_buffer_reset_callback)(cb);
@@ -3531,12 +3542,13 @@ void ValidationStateTracker::PostCallRecordAllocateCommandBuffers(VkDevice devic
             pool->commandBuffers.insert(pCommandBuffer[i]);
             auto mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
 #ifdef _DEBUG
+            mr->SetCB(pCommandBuffer[i]);
             std::cout << "AllocateCommandBuffers handle  " << pCommandBuffer[i] << std::endl;
-            std::cout << "AllocateCommandBuffers Before " << mr.use_count() << std::endl;
+            std::cout << "AllocateCommandBuffers Use Count Before Create State " << mr.use_count() << std::endl;
 #endif
             auto cb_state = std::make_shared<CMD_BUFFER_STATE>(mr);
 #ifdef _DEBUG
-            std::cout << "AllocateCommandBuffers After  " << mr.use_count() << std::endl;
+            std::cout << "AllocateCommandBuffers Use Count After Create State " << mr.use_count() << std::endl;
 #endif
             cb_state->createInfo = *pCreateInfo;
             cb_state->command_pool = pool;

@@ -182,14 +182,8 @@ ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(CMD_BUFFER_STATE *cb_sta
     auto it = cb_state->image_layout_map.find(image_state.image);
     if (it == cb_state->image_layout_map.end()) {
         // Empty slot... fill it in.
-#ifdef _DEBUG
-        std::cout << "Before " << cb_state->memory_resource.use_count() << std::endl;
-#endif
         auto insert_pair = cb_state->image_layout_map.insert(
             std::make_pair(image_state.image, LayoutMapFactory(image_state, cb_state->memory_resource)));
-#ifdef _DEBUG
-        std::cout << "After " << cb_state->memory_resource.use_count() << std::endl;
-#endif
         assert(insert_pair.second);
         ImageSubresourceLayoutMap *new_map = insert_pair.first->second.get();
         assert(new_map);
