@@ -27,55 +27,19 @@
 #include <memory>
 #include <vector>
 
-#include <assert.h>
-#ifdef _DEBUG
-#include "vulkan/vulkan.h"
-#endif
-
 // Monotonic Memory Resource
 // This is a memory resource that is intended to be used with a std::allocator replacement
 // for stdlib container allocations. As such, it can be called to allocate the memory for the
 // objects in a container, as well as for other allocations performed by the container itself.
 // Because the container can request memory of any type, this is an untyped allocator.
-class MonotonicMemoryResource
-{
-public:
+class MonotonicMemoryResource {
+  public:
     // block_size is the size of the individual memory blocks allocated. The number of blocks increases as needed to
     // fit requested allocations, and blocks are freed using an appropriate call to Clear or upon destruction of this
     // MonotonicMemoryResource.
-    MonotonicMemoryResource(std::size_t block_size) :
-        block_size_(block_size), current_block_(0), current_block_free_bytes_(block_size)
-    {
-#ifdef _DEBUG
-        std::cout << "MonotonicMemoryResource created!" << std::endl;
-#endif
-    }
-#if 0
-    MonotonicMemoryResource(MonotonicMemoryResource const &other) :
-        block_size_(kMonotonicBlockSize) {}
-#endif
-    ~MonotonicMemoryResource() {
-#ifdef _DEBUG
-        std::cout << "MonotonicMemoryResource destroyed!" << std::endl;
-#endif
-        Clear(true);
-    }
-
-    // TODO Remove?
-#if 0
-    // Allocates memory for count objects of type T and optionally initializes them with default constructor. Objects
-    // allocated here are valid until the next call to Clear. If the allocation requires greater than block_size
-    // bytes (oversized allocation), a system heap allocation is performed.
-    template <typename T>
-    T* Allocate(size_t count = 1)
-    {
-        T* result = reinterpret_cast<T*>(Allocate(sizeof(T) * count, alignof(T)));
-        assert(result != nullptr);
-        assert(!(reinterpret_cast<uintptr_t>(result) % std::alignment_of<T>::value) &&
-            "Allocated memory is not correctly aligned.");
-        return result;
-    }
-#endif
+    MonotonicMemoryResource(std::size_t block_size)
+        : block_size_(block_size), current_block_(0), current_block_free_bytes_(block_size) {}
+    ~MonotonicMemoryResource() { Clear(true); }
 
     // "Frees" all previously allocated objects. Depending on free_system_memory, system memory blocks are either
     // reused for new calls to Allocate or freed and re-created as needed. Oversized allocations are freed from system
@@ -84,23 +48,15 @@ public:
 
     void* Allocate(std::size_t object_bytes, std::size_t alignment_bytes);
     size_t BlocksInUse() { return memory_blocks_.size(); }
-#ifdef _DEBUG
-    void SetCB(VkCommandBuffer cb) { cb_ = cb; std::cout << "MonotonicMemoryResource CB set " << cb_ << std::endl; }
-    VkCommandBuffer GetCB() { return cb_; }
-#endif
 
-private:
+  private:
     void* AllocateToBlock(std::size_t object_bytes, std::size_t alignment_bytes);
 
-private:
     std::vector<std::unique_ptr<unsigned char[]>> memory_blocks_;
     std::vector<std::unique_ptr<unsigned char[]>> oversized_allocations_;
-    const std::size_t                             block_size_;
-    std::size_t                                   current_block_;
-    std::size_t                                   current_block_free_bytes_;
-#ifdef _DEBUG
-    VkCommandBuffer                               cb_;
-#endif
+    const std::size_t block_size_;
+    std::size_t current_block_;
+    std::size_t current_block_free_bytes_;
 };
 
-#endif // MEMORY_RESOURCE_H
+#endif  // MEMORY_RESOURCE_H

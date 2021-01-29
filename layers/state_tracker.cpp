@@ -1407,11 +1407,6 @@ void ValidationStateTracker::RemoveCommandBufferBinding(VulkanTypedHandle const 
 void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
     CMD_BUFFER_STATE *cb_state = GetCBState(cb);
     if (cb_state) {
-#ifdef _DEBUG
-        std::cout << "Reset command buffer -  existing handle: " << cb_state->commandBuffer << std::endl;
-        std::cout << "Reset command buffer -  incoming handle: " << cb << std::endl;
-        std::cout << "Reset command buffer -  MR " << cb_state->memory_resource << std::endl;
-#endif
         cb_state->in_use.store(0);
         // Reset CB state (note that createInfo is not cleared)
         cb_state->commandBuffer = cb;
@@ -1451,19 +1446,7 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
         cb_state->writeEventsBeforeWait.clear();
         cb_state->activeQueries.clear();
         cb_state->startedQueries.clear();
-        if (cb_state->image_layout_map.size() > 0) {
-#ifdef _DEBUG
-            std::cout << "Reset command buffer map size: " << cb_state->image_layout_map.size() << std::endl;
-#endif
-        }
-#ifdef _DEBUG
-        std::cout << "Reset command buffer MR Use Count Before clear: " << cb_state->memory_resource.use_count() << std::endl;
-#endif
         cb_state->image_layout_map.clear();
-#ifdef _DEBUG
-        std::cout << "Reset command buffer MR USe Count After  clear: " << cb_state->memory_resource.use_count() << std::endl;
-#endif
-
         cb_state->current_vertex_buffer_binding_info.vertex_buffer_bindings.clear();
         cb_state->vertex_buffer_used = false;
         cb_state->primaryCommandBuffer = VK_NULL_HANDLE;
@@ -1517,7 +1500,7 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
         // - Destroy the old memory resource by writing over it with the new one
         // Note that the image layout map should be empty before doing this.
         if (cb_state->memory_resource->BlocksInUse() > 16) {
-            auto new_mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
+            auto new_mr = std::make_shared<MonotonicMemoryResource>(kCBStateAllocBlockSize);
             cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
             cb_state->memory_resource = new_mr;
         }
@@ -3051,7 +3034,6 @@ void ValidationStateTracker::FreeCommandBufferStates(COMMAND_POOL_STATE *pool_st
             // reset prior to delete, removing various references to it.
             // TODO: fix this, it's insane.
             ResetCommandBufferState(cb_state->commandBuffer);
-            // cb_state->memory_resource->Clear(true);
             // Remove the cb_state's references from COMMAND_POOL_STATEs
             pool_state->commandBuffers.erase(command_buffers[i]);
             // Remove the cb debug labels
@@ -3540,16 +3522,8 @@ void ValidationStateTracker::PostCallRecordAllocateCommandBuffers(VkDevice devic
         for (uint32_t i = 0; i < pCreateInfo->commandBufferCount; i++) {
             // Add command buffer to its commandPool map
             pool->commandBuffers.insert(pCommandBuffer[i]);
-            auto mr = std::make_shared<MonotonicMemoryResource>(kMonotonicBlockSize);
-#ifdef _DEBUG
-            mr->SetCB(pCommandBuffer[i]);
-            std::cout << "AllocateCommandBuffers handle  " << pCommandBuffer[i] << std::endl;
-            std::cout << "AllocateCommandBuffers Use Count Before Create State " << mr.use_count() << std::endl;
-#endif
+            auto mr = std::make_shared<MonotonicMemoryResource>(kCBStateAllocBlockSize);
             auto cb_state = std::make_shared<CMD_BUFFER_STATE>(mr);
-#ifdef _DEBUG
-            std::cout << "AllocateCommandBuffers Use Count After Create State " << mr.use_count() << std::endl;
-#endif
             cb_state->createInfo = *pCreateInfo;
             cb_state->command_pool = pool;
             cb_state->unprotected = pool->unprotected;
