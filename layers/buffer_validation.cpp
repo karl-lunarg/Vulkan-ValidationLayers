@@ -4191,7 +4191,7 @@ bool CoreChecks::ValidateCmdBufImageLayouts(const CMD_BUFFER_STATE *pCB, const G
     GlobalImageLayoutMap &overlay_layout_map = *overlayLayoutMap_arg;
     // Iterate over the layout maps for each referenced image
     GlobalImageLayoutRangeMap empty_map(1);
-    for (const auto &layout_map_entry : pCB->image_layout_map) {
+    for (const auto &layout_map_entry : *pCB->image_layout_map) {
         const auto image = layout_map_entry.first;
         const auto *image_state = GetImageState(image);
         if (!image_state) continue;  // Can't check layouts of a dead image
@@ -4261,7 +4261,7 @@ bool CoreChecks::ValidateCmdBufImageLayouts(const CMD_BUFFER_STATE *pCB, const G
 }
 
 void CoreChecks::UpdateCmdBufImageLayouts(CMD_BUFFER_STATE *pCB) {
-    for (const auto &layout_map_entry : pCB->image_layout_map) {
+    for (const auto &layout_map_entry : *pCB->image_layout_map) {
         const auto image = layout_map_entry.first;
         const auto &subres_map = layout_map_entry.second;
         const auto *image_state = GetImageState(image);

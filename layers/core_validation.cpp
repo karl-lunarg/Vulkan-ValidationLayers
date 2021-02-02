@@ -171,8 +171,8 @@ static std::unique_ptr<ImageSubresourceLayoutMap, decltype(&map_destructor)> Lay
 
 // The const variant only need the image as it is the key for the map
 const ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(const CMD_BUFFER_STATE *cb_state, VkImage image) {
-    auto it = cb_state->image_layout_map.find(image);
-    if (it == cb_state->image_layout_map.cend()) {
+    auto it = cb_state->image_layout_map->find(image);
+    if (it == cb_state->image_layout_map->cend()) {
         return nullptr;
     }
     return it->second.get();
@@ -180,10 +180,10 @@ const ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(const CMD_BUFFER_S
 
 // The non-const variant only needs the image state, as the factory requires it to construct a new entry
 ImageSubresourceLayoutMap *GetImageSubresourceLayoutMap(CMD_BUFFER_STATE *cb_state, const IMAGE_STATE &image_state) {
-    auto it = cb_state->image_layout_map.find(image_state.image);
-    if (it == cb_state->image_layout_map.end()) {
+    auto it = cb_state->image_layout_map->find(image_state.image);
+    if (it == cb_state->image_layout_map->end()) {
         // Empty slot... fill it in.
-        auto insert_pair = cb_state->image_layout_map.insert(
+        auto insert_pair = cb_state->image_layout_map->insert(
             std::make_pair(image_state.image, LayoutMapFactory(image_state, cb_state->memory_resource)));
         assert(insert_pair.second);
         ImageSubresourceLayoutMap *new_map = insert_pair.first->second.get();
@@ -11570,7 +11570,7 @@ bool CoreChecks::PreCallValidateCmdExecuteCommands(VkCommandBuffer commandBuffer
         // Novel Valid usage: "UNASSIGNED-vkCmdExecuteCommands-commandBuffer-00001"
         // initial layout usage of secondary command buffers resources must match parent command buffer
         const auto *const_cb_state = static_cast<const CMD_BUFFER_STATE *>(cb_state);
-        for (const auto &sub_layout_map_entry : sub_cb_state->image_layout_map) {
+        for (const auto &sub_layout_map_entry : *sub_cb_state->image_layout_map) {
             const auto image = sub_layout_map_entry.first;
             const auto *image_state = GetImageState(image);
             if (!image_state) continue;  // Can't set layouts of a dead image

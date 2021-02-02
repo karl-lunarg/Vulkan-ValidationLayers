@@ -78,7 +78,7 @@ class ValidationStateTracker;
 // CMD_BUFFER_STATE Custom Allocator
 //
 // The CMD_BUFFER_STATE structure tracks a lot of state that accumulates over time and isn't released
-// until the command buffer is reset or deleted.  This pattern maps into a monotonic memory allocation
+// until the command buffer is reset or deleted.  This pattern maps well into a monotonic memory allocation
 // scheme that provides fast allocations from a list of memory blocks and fast deallocations by deferring
 // returning the memory to the system heap until it all can be returned at once.
 //
@@ -98,9 +98,6 @@ class ValidationStateTracker;
 // - The "anchor owner" for the memory resource is the smart shared pointer in the CB_BUFFER_STATE.  This means
 //   that the memory resource does not go away completely until the CB_BUFFER_STATE is destroyed.  This is what
 //   we want in general, but reset command buffer handling affects this as well.
-// - It is important that this allocator is used for objects in certain cases:
-//   - The lifetime of the object is contained within the lifetime of a CB_BUFFER_STATE.
-//   - The object is not deleted until a command buffer is reset or destroyed.
 //
 
 template <class T>
@@ -1306,7 +1303,11 @@ struct QFOTransferCBScoreboards {
     QFOTransferCBScoreboard<Barrier> release;
 };
 
-constexpr static size_t kCBStateAllocBlockSize = 4096;
+// This size is somewhat arbitrary and could be tuned.
+// Assume that most STL allocations are small (for things like hash tables and tree nodes).
+// Take into consideration the size of any non-STL objects.  In this case, an ImageSubresourceLayoutMap
+// is about 1K bytes, so it makes sense to be able to handle several of these in a block.
+constexpr static size_t kCBStateAllocBlockSize = 8192;
 
 typedef std::map<QueryObject, QueryState> QueryMap;
 typedef std::unordered_map<VkEvent, VkPipelineStageFlags> EventToStageMap;
@@ -1352,13 +1353,25 @@ static LvlBindPoint inline ConvertToLvlBindPoint(VkPipelineBindPoint bind_point)
     return LvlBindPoint(~0U);
 }
 
+// Workaround for missing make_unique in C++11.
+template <typename T, typename... Args>
+std::unique_ptr<T> my_make_unique(Args &&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
 struct SUBPASS_INFO;
 class FRAMEBUFFER_STATE;
 // Cmd Buffer Wrapper Struct - TODO : This desperately needs its own class
 struct CMD_BUFFER_STATE : public BASE_NODE {
-    // Need to set the CB_BUFFER_STATE special memory resource and construct any object that uses the std::allocator replacement
-    // with that memory resource. 
-    CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : image_layout_map(mr), memory_resource(mr) {} 
+    CMD_BUFFER_STATE(std::shared_ptr<MonotonicMemoryResource> mr) : memory_resource(mr) {
+        // Construct any object that uses the std::allocator replacement (and the memory_resource).
+        // Note that we must use a smart pointer to dynamically allocate these instead of just making them
+        // part of the structure so that we can completely destroy them in order to free memory resource blocks.
+        attachments_view_states =
+            my_make_unique<std::set<std::shared_ptr<IMAGE_VIEW_STATE>, std::less<std::shared_ptr<IMAGE_VIEW_STATE>>,
+                                    CBStateAllocator<std::shared_ptr<IMAGE_VIEW_STATE>>>>(mr);
+        image_layout_map = my_make_unique<CommandBufferImageLayoutMap>(mr);
+    }
     VkCommandBuffer commandBuffer;
     VkCommandBufferAllocateInfo createInfo = {};
     VkCommandBufferBeginInfo beginInfo;
@@ -1407,7 +1420,9 @@ struct CMD_BUFFER_STATE : public BASE_NODE {
     std::shared_ptr<RENDER_PASS_STATE> activeRenderPass;
     std::shared_ptr<std::vector<SUBPASS_INFO>> active_subpasses;
     std::shared_ptr<std::vector<IMAGE_VIEW_STATE *>> active_attachments;
-    std::set<std::shared_ptr<IMAGE_VIEW_STATE>> attachments_view_states;
+    std::unique_ptr<std::set<std::shared_ptr<IMAGE_VIEW_STATE>, std::less<std::shared_ptr<IMAGE_VIEW_STATE>>,
+                             CBStateAllocator<std::shared_ptr<IMAGE_VIEW_STATE>>>>
+        attachments_view_states;
 
     VkSubpassContents activeSubpassContents;
     uint32_t active_render_pass_device_mask;
@@ -1428,7 +1443,7 @@ struct CMD_BUFFER_STATE : public BASE_NODE {
     std::unordered_set<QueryObject> activeQueries;
     std::unordered_set<QueryObject> startedQueries;
     std::unordered_set<QueryObject> resetQueries;
-    CommandBufferImageLayoutMap image_layout_map;
+    std::unique_ptr<CommandBufferImageLayoutMap> image_layout_map;
     std::shared_ptr<MonotonicMemoryResource> memory_resource;
     CBVertexBufferBindingInfo current_vertex_buffer_binding_info;
     bool vertex_buffer_used;  // Track for perf warning to make sure any bound vtx buffer used

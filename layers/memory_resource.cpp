@@ -22,11 +22,18 @@
 
 #include "memory_resource.h"
 
+void MonotonicMemoryResource::Reset(std::size_t max_blocks_to_keep)
+{
+    Clear(false);
+    if (max_blocks_to_keep < memory_blocks_.size()) {
+        memory_blocks_.resize(max_blocks_to_keep);
+    }
+}
+
 void MonotonicMemoryResource::Clear(bool free_system_memory)
 {
     // Free memory blocks
-    if (free_system_memory)
-    {
+    if (free_system_memory) {
         memory_blocks_.clear();
     }
 

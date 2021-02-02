@@ -1437,7 +1437,7 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
         cb_state->activeRenderPass = nullptr;
         cb_state->active_attachments = nullptr;
         cb_state->active_subpasses = nullptr;
-        cb_state->attachments_view_states.clear();
+        cb_state->attachments_view_states->clear();
         cb_state->activeSubpassContents = VK_SUBPASS_CONTENTS_INLINE;
         cb_state->activeSubpass = 0;
         cb_state->broken_bindings.clear();
@@ -1446,7 +1446,7 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
         cb_state->writeEventsBeforeWait.clear();
         cb_state->activeQueries.clear();
         cb_state->startedQueries.clear();
-        cb_state->image_layout_map.clear();
+        cb_state->image_layout_map->clear();
         cb_state->current_vertex_buffer_binding_info.vertex_buffer_bindings.clear();
         cb_state->vertex_buffer_used = false;
         cb_state->primaryCommandBuffer = VK_NULL_HANDLE;
@@ -1491,18 +1491,20 @@ void ValidationStateTracker::ResetCommandBufferState(const VkCommandBuffer cb) {
 
         cb_state->transform_feedback_active = false;
 
-        // If we get a lot of resets before the CB is destroyed, then the memory resource keeps growing because the CB state
-        // isn't getting destroyed (until the CB itself is actually destroyed).  The image_layout_map is still using the memory resource
-        // so we must do:
-        // - Create a new memory resource
-        // - Create a new image_layout_map with the new memory resource
-        // - Destroy the old image_layout_map by writing over it with the new one
-        // - Destroy the old memory resource by writing over it with the new one
-        // Note that the image layout map should be empty before doing this.
-        if (cb_state->memory_resource->BlocksInUse() > 16) {
-            auto new_mr = std::make_shared<MonotonicMemoryResource>(kCBStateAllocBlockSize);
-            cb_state->image_layout_map = CommandBufferImageLayoutMap(new_mr);
-            cb_state->memory_resource = new_mr;
+        // Once the memory resource exceeds a certain size:
+        // - Destroy all the objects using the memory resource to ensure that the memory resource is no longer being used.
+        // - Reset the memory resource to the desired size.
+        // - Reconstruct the objects.
+        if (cb_state->memory_resource->BlocksInUse() > 2) {
+            cb_state->attachments_view_states = nullptr;
+            cb_state->image_layout_map = nullptr;
+
+            cb_state->memory_resource->Reset(2);
+
+            cb_state->attachments_view_states =
+                my_make_unique<std::set<std::shared_ptr<IMAGE_VIEW_STATE>, std::less<std::shared_ptr<IMAGE_VIEW_STATE>>,
+                                        CBStateAllocator<std::shared_ptr<IMAGE_VIEW_STATE>>>>(cb_state->memory_resource);
+            cb_state->image_layout_map = my_make_unique<CommandBufferImageLayoutMap>(cb_state->memory_resource);
         }
     }
     if (command_buffer_reset_callback) {
@@ -3596,12 +3598,12 @@ void UpdateAttachmentsView(ValidationStateTracker &tracker, CMD_BUFFER_STATE &cb
     for (uint32_t i = 0; i < attachments.size(); ++i) {
         if (imageless) {
             if (attachment_info_struct && i < attachment_info_struct->attachmentCount) {
-                auto res = cb_state.attachments_view_states.insert(
+                auto res = cb_state.attachments_view_states->insert(
                     tracker.GetShared<IMAGE_VIEW_STATE>(attachment_info_struct->pAttachments[i]));
                 attachments[i] = res.first->get();
             }
         } else {
-            auto res = cb_state.attachments_view_states.insert(framebuffer.attachments_view_state[i]);
+            auto res = cb_state.attachments_view_states->insert(framebuffer.attachments_view_state[i]);
             attachments[i] = res.first->get();
         }
     }
@@ -4934,7 +4936,7 @@ void ValidationStateTracker::PreCallRecordCmdExecuteCommands(VkCommandBuffer com
         // NOTE: The update/population of the image_layout_map is done in CoreChecks, but for other classes derived from
         // ValidationStateTracker these maps will be empty, so leaving the propagation in the the state tracker should be a no-op
         // for those other classes.
-        for (const auto &sub_layout_map_entry : sub_cb_state->image_layout_map) {
+        for (const auto &sub_layout_map_entry : *sub_cb_state->image_layout_map) {
             const auto image = sub_layout_map_entry.first;
             const auto *image_state = GetImageState(image);
             if (!image_state) continue;  // Can't set layouts of a dead image

@@ -23,7 +23,6 @@
 #ifndef MEMORY_RESOURCE_H
 #define MEMORY_RESOURCE_H
 
-#include <iostream>
 #include <memory>
 #include <vector>
 
@@ -45,6 +44,9 @@ class MonotonicMemoryResource {
     // reused for new calls to Allocate or freed and re-created as needed. Oversized allocations are freed from system
     // memory
     void Clear(bool free_system_memory);
+
+    // This is similar to Clear(true) except that the specified number of blocks are kept.
+    void Reset(std::size_t max_blocks_to_keep);
 
     void* Allocate(std::size_t object_bytes, std::size_t alignment_bytes);
     size_t BlocksInUse() { return memory_blocks_.size(); }
